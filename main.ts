@@ -1,9 +1,10 @@
 import * as SocketIO from "socket.io"
 import * as HTTP from "http"
-import { Pool } from "mysql"
 import { v4 } from "uuid"
 import { Room } from "./lib/Room"
 import * as DBHelper from "./lib/DatabaseHelper"
+import { EventName } from "./lib/EventName"
+import { Pool } from "mysql"
 
 let RoomLst : Room[] = [];
 
@@ -16,96 +17,32 @@ const SocketServer = new SocketIO.Server({
     pingInterval : 10000
 });
 
-const DBPool : Pool = DBHelper.DBPool;
-
 SocketServer.on("connection", (socket : SocketIO.Socket) => {
-    console.log(socket);
+    console.log(`A new client connected, socket id: ${socket.id}`);
 
-    socket.on("login", (data : any) => {
-        console.log(data);
+    socket.on(EventName.EVENT_LOGIN, ProcessLogin.bind(null, socket));
 
-        //query player info from db
-    });
+    socket.on("logout", ProcessLogout.bind(null, socket));
 
-    socket.on("logout", (data : any) => {
-        console.log(data);
-    });
+    socket.on("register", ProcessRegister.bind(null, socket));
 
-    socket.on("register", (data : any) => {
-        console.log(data);
-        let new_player_id : string = v4();
-        //insert to database
-    });
+    socket.on("create room", ProcessCreateRoom.bind(null, socket));
 
-    socket.on("create room", (data : any) => {
-        console.log(data);
-    });
+    socket.on("join room", ProcessJoinRoom.bind(null, socket));
 
-    socket.on("join room", (data : any) => {
-        console.log(data);
+    socket.on("leave room", ProcessLeaveRoom.bind(null, socket));
 
-        //verify password if set
+    socket.on("start game", ProcessStartGame.bind(null, socket));
 
-        //inform other player
-        //socket.join(data.room_name);
-    });
+    socket.on("buy item", ProcessBuyItem.bind(null, socket));
 
-    socket.on("leave room", (data : any) => {
-        console.log(data);
-        
-        //inform other player
-        //socket.leave(data.room_name);
+    socket.on("save item", ProcessSaveItem.bind(null, socket));
 
-        //if no one in room, remove room from array
-        const roomIdx = RoomLst.findIndex(room => room.name == data.room_name);
-        const room : Room = RoomLst[roomIdx];
-        if(room.socket_lst.length == 0)
-        {
-            RoomLst.splice(roomIdx, 1);
-        }
-    });
+    socket.on("get rooms", ProcessGetRooms.bind(null, socket));
 
-    socket.on("start game", (data : any) => {
-        const current_room : string = socket.rooms.values().next().value || "default" ;
-        if(current_room != "default")
-        {
-            socket.to(current_room).emit("start game");
-            RoomLst.find(room => room.name = current_room)?.StartGame();
-        }
-        else
-        {
-            socket.emit("start game");
-        }
-    });
+    socket.on("disconnect", ProcessDisconnect.bind(null, socket));
 
-    socket.on("buy item", (data : any) => {
-        console.log(data);
-    });
-
-    socket.on("save item", (data : any) => {
-        console.log(data);
-    });
-
-    socket.on("get item info", (data : any) => {
-        console.log(data);
-    });
-
-    socket.on("get rooms", (data : any) => {
-        console.log(data); 
-        //return available room first
-    });
-
-    socket.on("disconnect", (reason : SocketIO.DisconnectReason) => {
-        const current_room : string = socket.rooms.values().next().value || "default" ;
-        if(current_room != "default")
-        {
-            SocketServer.to(current_room).emit("player disconnect", /* custom data */);
-        }
-    });
-
-    socket.on("reconnect", (data : any) => {
-        console.log(data);
-    });
+    socket.on("reconnect", ProcessReconnect.bind(null, socket));
 });
 
 HttpServer.listen(9999, '0.0.0.0', () => {
@@ -114,3 +51,119 @@ HttpServer.listen(9999, '0.0.0.0', () => {
 });
 
 SocketServer.listen(HttpServer);
+
+
+//Event Processor
+const DBPool : Pool = DBHelper.DBPool;
+async function ProcessLogin(socket : SocketIO.Socket, data : any)
+{
+    let json : any = JSON.parse(data);
+
+    //query player info from db
+    let result : any = await DBHelper.Select(DBPool, DBHelper.TableName.USER_INFO_TBL, "username", json.username, ['id', 'username', 'password']);
+    if(result.length > 0)
+    {
+        let user_data : any = result[0];
+        if(user_data.password == json.password)
+        {
+            console.log(`Login success, user id: ${user_data.id}`);
+        }
+        else
+        {
+            console.log(`Wrong password for username: ${json.username}`);
+        }
+    }
+    else 
+    {
+        console.log("Cannot find this username");
+    }
+}
+
+async function ProcessLogout(socket : SocketIO.Socket, data : any)
+{
+    console.log(data);
+}
+
+async function ProcessRegister(socket : SocketIO.Socket, data : any)
+{
+    let json : any = JSON.parse(data);
+    let new_player_id : string = v4();
+
+    //insert to database
+}
+
+function ProcessCreateRoom(socket : SocketIO.Socket, data : any)
+{
+    console.log(data);
+}
+
+function ProcessJoinRoom(socket : SocketIO.Socket, data : any)
+{
+    console.log(data);
+
+    
+        //verify password if set
+
+        //inform other player
+        //socket.join(data.room_name);
+}
+
+function ProcessLeaveRoom(socket : SocketIO.Socket, data : any)
+{
+    console.log(data);
+        
+    //inform other player
+    //socket.leave(data.room_name);
+
+    //if no one in room, remove room from array
+    const roomIdx = RoomLst.findIndex(room => room.name == data.room_name);
+    const room : Room = RoomLst[roomIdx];
+    if(room.socket_lst.length == 0)
+    {
+        RoomLst.splice(roomIdx, 1);
+    }
+}
+
+function ProcessStartGame(socket : SocketIO.Socket, data : any)
+{
+    const current_room : string = socket.rooms.values().next().value || "default" ;
+    if(current_room != "default")
+    {
+        socket.to(current_room).emit("start game");
+        RoomLst.find(room => room.name = current_room)?.StartGame();
+    }
+    else
+    {
+        socket.emit("start game");
+    }
+}
+
+async function ProcessBuyItem(socket : SocketIO.Socket, data : any)
+{
+
+}
+
+async function ProcessSaveItem(socket : SocketIO.Socket, data : any)
+{
+
+}
+
+async function ProcessGetRooms(socket : SocketIO.Socket, data : any)
+{
+
+}
+
+function ProcessDisconnect(socket : SocketIO.Socket, reason : SocketIO.DisconnectReason)
+{
+    const current_room : string = socket.rooms.values().next().value || "default" ;
+    if(current_room != "default")
+    {
+        SocketServer.to(current_room).emit("player disconnect", /* custom data */);
+    }
+    console.log("User disconnect with reason: " + reason);
+}
+
+function ProcessReconnect(socket : SocketIO.Socket, data : any)
+{
+
+}
