@@ -16,9 +16,18 @@ export function Select(pool : MySQL.Pool, table : string, key : string, valueOfK
     let SelectedField : string = field != "*" ? field.join(",") : field;
     let query : string = `Select ${SelectedField} from \`${table}\` where ${key} = '${valueOfKey}'`;
 
+    console.log(query);
     return new Promise((resolve, reject) => {
         pool.query(query, (err : any, res : any) => {
-            resolve(res);
+            if(err)
+            {
+                console.log(err);
+                reject(err);
+            } 
+            else
+            {
+                resolve(res);
+            }  
         });
     });
 }
@@ -29,9 +38,18 @@ export function Insert(pool : MySQL.Pool, table : string, columns : string[], va
     let inserted_columns : string = columns.join(","); 
     let query : string = `insert into \`${table}\` (${inserted_columns}) values (${inserted_values})`;
 
+    console.log(query);
     return new Promise((resolve, reject) => {
         pool.query(query, (err : any, res : any) => {
-            resolve(res);
+            if(err)
+            {
+                console.log(err);
+                reject(err);
+            } 
+            else
+            {
+                resolve(res);
+            }  
         });
     })
 }
@@ -47,14 +65,23 @@ export function Update(pool : MySQL.Pool, table : string, key : string, valueOfK
     let update_array : string[] = [];
     for(let i = 0; i < fields.length; i++)
     {
-        update_array.push(`${fields[i]} = ${values[i]}`);
+        update_array.push(`${fields[i]} = '${values[i]}'`);
     }
     let updated_fields : string = update_array.join(",");
     let query : string = `update ${table} set ${updated_fields} where ${key} = '${valueOfKey}'`;
 
+    console.log(query);
     return new Promise((resolve, reject) => {
         pool.query(query, (err : any, res : any) => {
-            resolve(res);
+            if(err)
+            {
+                console.log(err);
+                reject(err);
+            } 
+            else
+            {
+                resolve(res);
+            }       
         });
     })
 }
@@ -63,9 +90,18 @@ export function Delete(pool : MySQL.Pool, table : string, key : string, valueOfK
 {
     let query : string = `delete from \`${table}\` where ${key} = '${valueOfKey}'`;
 
+    console.log(query);
     return new Promise((resolve, reject) => {
         pool.query(query, (err : any, res : any) => {
-            resolve(res);
+            if(err)
+            {
+                console.log(err);
+                reject(err);
+            } 
+            else
+            {
+                resolve(res);
+            }  
         });
     })
 }

@@ -3,10 +3,12 @@ import * as HTTP from "http"
 import { v4 } from "uuid"
 import { Room } from "./lib/Room"
 import * as DBHelper from "./lib/DatabaseHelper"
-import { EventName } from "./lib/EventName"
+import { EventName, LoginFailedReason, LoginState } from "./lib/Constants"
 import { Pool } from "mysql"
+import { UserInfo } from "./lib/UserInfo"
 
 let RoomLst : Room[] = [];
+let ActiveUsers : Map<string, UserInfo> = new Map<string, UserInfo>();
 
 const HttpServer = HTTP.createServer();
 
@@ -21,6 +23,8 @@ SocketServer.on("connection", (socket : SocketIO.Socket) => {
     console.log(`A new client connected, socket id: ${socket.id}`);
 
     socket.on(EventName.EVENT_LOGIN, ProcessLogin.bind(null, socket));
+
+    socket.on(EventName.EVENT_MODIFY_NICKNAME, ProcessModifyNickName.bind(null, socket));
 
     socket.on("logout", ProcessLogout.bind(null, socket));
 
@@ -60,23 +64,27 @@ async function ProcessLogin(socket : SocketIO.Socket, data : any)
     let json : any = JSON.parse(data);
 
     //query player info from db
-    let result : any = await DBHelper.Select(DBPool, DBHelper.TableName.USER_INFO_TBL, "username", json.username, ['id', 'username', 'password']);
+    let result : any = await DBHelper.Select(DBPool, DBHelper.TableName.USER_INFO_TBL, "Username", json.Username);
+    let response : string;
     if(result.length > 0)
     {
-        let user_data : any = result[0];
-        if(user_data.password == json.password)
+        let UserData : any = result[0];
+        if(UserData.Password == json.Password)
         {
-            console.log(`Login success, user id: ${user_data.id}`);
+            response = MakeMessage(["State", "UserData"], [LoginState.SUCCESS, UserData]);
+            let User : UserInfo = new UserInfo(UserData);
+            ActiveUsers.set(socket.id, User);
         }
         else
         {
-            console.log(`Wrong password for username: ${json.username}`);
+            response = MakeMessage(["State", "Reason"], [LoginState.FAIL, LoginFailedReason.WRONG_PASSWORD]);
         }
     }
     else 
     {
-        console.log("Cannot find this username");
+        response = MakeMessage(["State", "Reason"], [LoginState.FAIL, LoginFailedReason.USERNAME_NOT_FOUND]);
     }
+    socket.emit(EventName.EVENT_LOGIN, response);
 }
 
 async function ProcessLogout(socket : SocketIO.Socket, data : any)
@@ -161,9 +169,43 @@ function ProcessDisconnect(socket : SocketIO.Socket, reason : SocketIO.Disconnec
         SocketServer.to(current_room).emit("player disconnect", /* custom data */);
     }
     console.log("User disconnect with reason: " + reason);
+    ActiveUsers.delete(socket.id);
 }
 
 function ProcessReconnect(socket : SocketIO.Socket, data : any)
 {
 
+}
+
+async function ProcessModifyNickName(socket : SocketIO.Socket, data : any)
+{
+    let json : any = JSON.parse(data);
+    let User : UserInfo | undefined = ActiveUsers.get(socket.id);
+    if(User)
+    {
+        if(User.IsFirstLogin)
+        {
+            await DBHelper.Update(DBPool, "user_info", "ID", User.ID, ["IsFirstLogin", "NickName"], [0, json.NickName]);
+            User.IsFirstLogin = false;
+            User.NickName = json.NickName;
+        }
+        else
+        {
+            await DBHelper.Update(DBPool, "user_info", "ID", User.ID, ["NickName"], [json.NickName]);
+            User.NickName = json.NickName;
+        }
+
+        socket.emit(EventName.EVENT_MODIFY_NICKNAME, MakeMessage(['NickName'], [json.NickName]));
+    }
+}
+
+//Make message
+function MakeMessage(keys : string[], values : any) : any
+{
+    let message : any = {};
+    for(let i = 0; i < keys.length; i++)
+    {
+        message[keys[i]] = values[i];
+    }
+    return message;
 }
