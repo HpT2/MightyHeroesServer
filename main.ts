@@ -42,7 +42,7 @@ SocketServer.on("connection", (socket : SocketIO.Socket) => {
 
     socket.on("save item", ProcessSaveItem.bind(null, socket));
 
-    socket.on("get rooms", ProcessGetRooms.bind(null, socket));
+    socket.on(EventName.EVENT_GET_ROOM_LIST, ProcessGetRooms.bind(null, socket));
 
     socket.on("disconnect", ProcessDisconnect.bind(null, socket));
 
@@ -158,7 +158,7 @@ async function ProcessSaveItem(socket : SocketIO.Socket, data : any)
 
 async function ProcessGetRooms(socket : SocketIO.Socket, data : any)
 {
-
+    console.log("Getting rooms");
 }
 
 function ProcessDisconnect(socket : SocketIO.Socket, reason : SocketIO.DisconnectReason)
